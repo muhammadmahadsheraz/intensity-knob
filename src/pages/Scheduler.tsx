@@ -6,6 +6,7 @@ import type { Schedule } from "../types/schedule";
 import { createSchedule, getSchedule, getAvailability, getMeetings } from "../services/api";
 import type { Intensity } from "../components/constants";
 import { useAuth } from "../context/AuthContext";
+import type { Day } from "../types/availability";
 
 export default function Scheduler() {
     const { userId } = useAuth();
@@ -34,12 +35,11 @@ export default function Scheduler() {
         fetchSchedule();
     }, [userId, fetchSchedule]);
 
-    const handleCreateOrUpdate = async (intensity: Intensity) => {
+    const handleCreateOrUpdate = async (intensity: Intensity,skipDays:Day[] = []) => {
         try {
             const id = userId ? userId : "null";
-            const newSchedule = await createSchedule(id, intensity);
+            const newSchedule = await createSchedule(id, intensity,skipDays);
             setSchedule(newSchedule);
-
             getMeetings(userId!)
                 .then(meetings => setMeetingCount(meetings.filter(m => m.status !== "completed" && m.status !== "cancelled" && m.status !== "scheduled").length))
                 .catch(() => setMeetingCount(0));

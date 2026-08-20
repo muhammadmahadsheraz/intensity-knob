@@ -1,5 +1,5 @@
 import mongoose,{Schema,Document} from "mongoose"
-
+import { Day } from "./Availability";
 export interface IEntry {
     meetingId:mongoose.Types.ObjectId;
     date:Date;
@@ -11,6 +11,7 @@ export interface ISchedule extends Document{
     userId:mongoose.Types.ObjectId;
     intensity:"low"|"mild"|"moderate"|"intense"|"extreme";
     startDate:Date;
+    skipDays :Day[];
     entries:IEntry[];
 }
 
@@ -52,6 +53,9 @@ const scheduleSchema = new Schema<ISchedule> ({
     startDate:{
         type:Date,
         required:true
+    },skipDays:{
+        type:[String],
+        dafault:[]
     },
     entries:{
         type:[entrySchema],

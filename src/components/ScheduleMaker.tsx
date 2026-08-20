@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import type { Intensity } from "./constants";
 import "./Components.css";
 import { intensityValues } from "./constants";
+import type { Day } from "../types/availability";
 
 interface ScheduleMakerProp {
-    onSave: (intensity: Intensity) => void;
+    onSave: (intensity: Intensity,skipDays:Day[]) => void;
     hasAvailability: boolean;
     meetingCount: number;
 }
@@ -17,6 +18,7 @@ function ScheduleMaker({ onSave, hasAvailability, meetingCount }: ScheduleMakerP
     const [meetingDuration, setMeetingDuration] = useState("");
     const [breakTime, setBreakTime] = useState("");
     const [cycleLength, setCycleLength] = useState("");
+    const [skipDays,setSkipDays] = useState("");
 
     useEffect(() => {
         setMeetingsPerDay(intensityValues.find(item => item.key === value)?.value.meetingsPerDay.toString() || "");
@@ -44,7 +46,10 @@ function ScheduleMaker({ onSave, hasAvailability, meetingCount }: ScheduleMakerP
 
     const handleClick = () => {
         if (!canSave) return;
-        onSave(value);
+        let skip_Date = skipDays.split(",")
+        .map(day=>day.trim() as Day)
+        .filter(Boolean)
+        onSave(value,skip_Date);
     };
 
     return (
@@ -66,6 +71,10 @@ function ScheduleMaker({ onSave, hasAvailability, meetingCount }: ScheduleMakerP
                 <div className="schedule-input-row">
                     <label className="schedule-input-label">Cycle Length</label>
                     <input className="schedule-input" onChange={e => setCycleLength(e.target.value)} value={cycleLength} />
+                </div>
+                <div className = "schedule-input-row">
+                <label className="schedule-input-label">Days to Skip</label>
+                <input className="schedule-input" type = "skipDays" value = {skipDays} onChange = {(e) => setSkipDays(e.target.value) }placeholder="Entries separated by comma" />
                 </div>
             </div>
             {!canSave && (

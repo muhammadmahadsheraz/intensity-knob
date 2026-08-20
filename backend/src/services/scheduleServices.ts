@@ -5,7 +5,7 @@ import Availability from "../models/Availability"
 import {Day} from "../models/Availability"
 import {intensityValues,Intensity,days} from "../constants"
 
-export const createScheduleService = async (userId: string,intensity: Intensity) => {
+export const createScheduleService = async (userId: string,intensity: Intensity,skipDays:Day[] =[]) => {
     const entries: IEntry[] = [];
     const settings = intensityValues[intensity].value;
     const meetings = await Meeting.find({userId,status: {$nin: ["completed", "cancelled", "scheduled"]}}).sort({ deadline: 1 });
@@ -21,8 +21,12 @@ export const createScheduleService = async (userId: string,intensity: Intensity)
     let meetingIndex = 0;
     const startDate = new Date(now);
 
-    for ( let j = 0; j < settings.cycleLength && meetingIndex < meetings.length; j++) {
+    for ( let j = 0; j < settings.cycleLength && meetingIndex < meetings.length;) {
         const day: Day = days[daynum];
+        if(skipDays.includes(day)){
+            currentDate.setDate(currentDate.getDate()+1)
+            daynum= (daynum +1)%7;
+        }
         const slots = availability[day];
 
         if (slots.length > 0) {
@@ -53,6 +57,7 @@ export const createScheduleService = async (userId: string,intensity: Intensity)
                 }
             }
         }
+        j++
         currentDate.setDate(currentDate.getDate() + 1);
         daynum = (daynum + 1) % 7;
     }
@@ -134,6 +139,7 @@ export const rescheduleSkippedService = async (userId: string) => {
     if (skippedEntries.length === 0) return schedule;
 
     const cycleLength = getCycleLength(schedule.intensity);
+    const skipDays = schedule.skipDays || [];
     const startDate = schedule.startDate;
 
     for (const skipped of skippedEntries) {
@@ -150,7 +156,7 @@ export const rescheduleSkippedService = async (userId: string) => {
             .sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
 
         if (targetEntries.length === 0) {
-            skipped.date = getDateForSequence(startDate, targetSequence);
+            skipped.date = getDateForSequence(startDate, targetSequence,skipDays);
             skipped.sequence = targetSequence;
             skipped.start = "09:00";
             skipped.status = "scheduled";
@@ -179,7 +185,7 @@ export const rescheduleSkippedService = async (userId: string) => {
                     targetEntries[i].start = nextSequenceEntries[0].start;
                     targetEntries[i].sequence = nextSeq;
                 } else if (nextSeq < cycleLength) {
-                    targetEntries[i].date = getDateForSequence(startDate, nextSeq);
+                    targetEntries[i].date = getDateForSequence(startDate, nextSeq,skipDays);
                     targetEntries[i].start = "09:00";
                     targetEntries[i].sequence = nextSeq;
                 } else {
@@ -199,9 +205,15 @@ function getCycleLength(intensity: Intensity): number {
     return intensityValues[intensity].value.cycleLength;
 }
 
-function getDateForSequence(startDate: Date, sequence: number): Date {
+function getDateForSequence(startDate: Date, sequence: number,skipDays : Day[]=[]): Date {
     const date = new Date(startDate);
-    date.setDate(date.getDate() + sequence);
+    let added = 0;
+    while (added < sequence){
+        date.setDate(date.getDate() + 1);
+        if(!skipDays.includes(days[date.getDay()])){
+            added++;
+        }
+    }
     return date;
 }
 

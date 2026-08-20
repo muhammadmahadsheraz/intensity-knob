@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { loginUser } from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -6,6 +7,7 @@ import type { LoginUser } from "../types/user";
 import "./Auth.css";
 
 export default function Login() {
+    const navigate = useNavigate();
     const { login } = useAuth();
 
     const [form, setForm] = useState<LoginUser>({
@@ -18,6 +20,7 @@ export default function Login() {
         try {
             const user = await loginUser(form);
             login(user);
+            navigate("/meetings")
         } catch (error) {
             console.error(error);
         }

@@ -1,5 +1,6 @@
 import type { Meeting, CreateMeeting } from "../types/meeting";
 import type {CreateAvailability,Availability} from "../types/availability";
+import type { Day } from "../types/availability";
 import type { Schedule } from "../types/schedule";
 import type { Intensity } from "../components/constants";
 import type {User,CreateUser,LoginUser} from "../types/user"
@@ -110,7 +111,7 @@ export async function getAvailability(userId: string): Promise<Availability> {
     return response.json();
 }
 
-export async function createSchedule(userId: string,intensity: Intensity): Promise<Schedule> {
+export async function createSchedule(userId: string,intensity: Intensity,skipDays:Day[]=[]): Promise<Schedule> {
     const response = await fetch(
         `${API_URL}/schedules`,
         {
@@ -120,7 +121,8 @@ export async function createSchedule(userId: string,intensity: Intensity): Promi
             },
             body: JSON.stringify({
                 userId,
-                intensity
+                intensity,
+                skipDays
             })
         }
     );

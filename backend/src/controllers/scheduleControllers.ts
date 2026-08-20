@@ -11,8 +11,8 @@ import {createScheduleService,
 
 export const createSchedule = async (req:Request,res:Response) => {
     try {
-        const {userId,intensity} = req.body;
-        const Schedule = await createScheduleService(userId,intensity);
+        const {userId,intensity,skipDays} = req.body;
+        const Schedule = await createScheduleService(userId,intensity,skipDays);
         if(!Schedule){
             return res.status(400).json({
                 message: "No meetings available to schedule or no availability set"
