@@ -5,6 +5,10 @@ import Availability from "../models/Availability"
 import {Day} from "../models/Availability"
 import {intensityValues,Intensity,days} from "../constants"
 
+
+
+//Schedule Services hooked to its services controller
+
 export const createScheduleService = async (userId: string,intensity: Intensity,skipDays:Day[] =[]) => {
     const entries: IEntry[] = [];
     const settings = intensityValues[intensity].value;
@@ -130,9 +134,9 @@ export const skipMeetingService = async (meetingId: string, userId: string) => {
 }
 
 export const rescheduleSkippedService = async (userId: string) => {
+    const availability = await Availability.findOne({userId})
     const schedule = await Schedule.findOne({ userId });
     if (!schedule) return null;
-
     const skippedEntries = schedule.entries
         .filter(e => e.status === "skipped")
         .sort((a, b) => a.sequence - b.sequence);
@@ -142,10 +146,17 @@ export const rescheduleSkippedService = async (userId: string) => {
     const cycleLength = getCycleLength(schedule.intensity);
     const skipDays = schedule.skipDays || [];
     const startDate = schedule.startDate;
-
+    
     for (const skipped of skippedEntries) {
-        const targetSequence = skipped.sequence + 1;
-
+        let targetSequence = skipped.sequence + 1;
+        const today = new Date()
+        today.setHours(0,0,0,0)
+        while (targetSequence < cycleLength)
+        {
+            const getDate = getDateForSequence(startDate,targetSequence,skipDays);
+            if(getDate >= today) break;
+            targetSequence++;
+        }
         if (targetSequence >= cycleLength) {
             skipped.status = "pending";
             await Meeting.findByIdAndUpdate(skipped.meetingId, { status: "pending" });
@@ -153,13 +164,13 @@ export const rescheduleSkippedService = async (userId: string) => {
         }
 
         const targetEntries = schedule.entries
-            .filter(e => e.sequence === targetSequence && e.status !== "skipped" && e._id !== skipped._id)
-            .sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+        .filter(e => e.sequence === targetSequence && e.status === "scheduled" && e._id.toString() !== skipped._id.toString())
+        .sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
 
         if (targetEntries.length === 0) {
-            skipped.date = getDateForSequence(startDate, targetSequence,skipDays);
+            skipped.date = getDateForSequence(startDate, targetSequence, skipDays);
             skipped.sequence = targetSequence;
-            skipped.start = "09:00";
+            skipped.start = getDayStartTime(userId, skipped.date);
             skipped.status = "scheduled";
             await Meeting.findByIdAndUpdate(skipped.meetingId, { status: "scheduled" });
             continue;
@@ -171,35 +182,84 @@ export const rescheduleSkippedService = async (userId: string) => {
         skipped.status = "scheduled";
         await Meeting.findByIdAndUpdate(skipped.meetingId, { status: "scheduled" });
 
-        for (let i = 0; i < targetEntries.length; i++) {
-            if (i < targetEntries.length - 1) {
-                targetEntries[i].date = new Date(targetEntries[i + 1].date);
-                targetEntries[i].start = targetEntries[i + 1].start;
-            } else {
-                const nextSeq = targetSequence + 1;
-                const nextSequenceEntries = schedule.entries
-                    .filter(e => e.sequence === nextSeq && e.status !== "skipped" && e._id !== skipped._id)
-                    .sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+        for (let i = 0; i < targetEntries.length - 1; i++) {
+            targetEntries[i].date = new Date(targetEntries[i + 1].date);
+            targetEntries[i].start = targetEntries[i + 1].start;
+            targetEntries[i].sequence = targetSequence;
+        }
 
-                if (nextSeq < cycleLength && nextSequenceEntries.length > 0) {
-                    targetEntries[i].date = new Date(nextSequenceEntries[0].date);
-                    targetEntries[i].start = nextSequenceEntries[0].start;
-                    targetEntries[i].sequence = nextSeq;
-                } else if (nextSeq < cycleLength) {
-                    targetEntries[i].date = getDateForSequence(startDate, nextSeq,skipDays);
-                    targetEntries[i].start = "09:00";
-                    targetEntries[i].sequence = nextSeq;
-                } else {
-                    targetEntries[i].status = "pending";
-                    targetEntries[i].sequence = nextSeq;
-                    await Meeting.findByIdAndUpdate(targetEntries[i].meetingId, { status: "pending" });
+        let displaced = targetEntries[targetEntries.length - 1];
+        const maxPerDay = intensityValues[schedule.intensity].value.meetingsPerDay;
+
+        for (let seq = targetSequence; seq < cycleLength; seq++) {
+            const seqEntries = schedule.entries
+                .filter(e => e.sequence === seq && e.status === "scheduled" && e._id.toString() !== skipped._id.toString())
+                .sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+
+            if (seqEntries.length < maxPerDay) {
+                const seqDate = getDateForSequence(startDate, seq, skipDays);
+                const slotStart = getDayStartTime(userId, seqDate);
+                const slotEnd = getDayEndTime(userId, seqDate);
+                const startMin = timeToMinutes(slotStart);
+                const endMin = timeToMinutes(slotEnd);
+                const gap = (endMin - startMin) / (seqEntries.length + 1);
+
+                for (let i = 0; i < seqEntries.length; i++) {
+                    seqEntries[i].date = new Date(seqDate);
+                    seqEntries[i].start = minutesToTime(Math.floor(startMin + gap * (i + 1)));
+                    seqEntries[i].sequence = seq;
                 }
+
+                displaced.date = new Date(seqDate);
+                displaced.start = minutesToTime(Math.floor(startMin));
+                displaced.sequence = seq;
+                break;
             }
+
+            displaced.date = new Date(seqEntries[0].date);
+            displaced.start = seqEntries[0].start;
+            displaced.sequence = seq;
+
+            const nextSeq = seq + 1;
+            if (nextSeq >= cycleLength) {
+                displaced.status = "pending";
+                await Meeting.findByIdAndUpdate(displaced.meetingId, { status: "pending" });
+                break;
+            }
+
+            const nextEntries = schedule.entries
+                .filter(e => e.sequence === nextSeq && e.status === "scheduled" && e._id.toString() !== skipped._id.toString())
+                .sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+
+            if (nextEntries.length === 0) {
+                const nextDate = getDateForSequence(startDate, nextSeq, skipDays);
+                displaced.date = nextDate;
+                displaced.start = getDayStartTime(userId, nextDate);
+                displaced.sequence = nextSeq;
+                break;
+            }
+
+            displaced = nextEntries[0];
         }
     }
 
     await schedule.save();
     return schedule;
+    function getDayStartTime(userId:string,date:Date):string{
+        if (!availability) return "9:00";
+        const day : Day = days[date.getDay()]
+        let slots = availability[day]
+        if (slots && slots.length > 0) return slots[0].start;
+        return "9:00"
+    }
+
+    function getDayEndTime(userId:string,date:Date):string{
+        if (!availability) return "17:00";
+        const day : Day = days[date.getDay()]
+        let slots = availability[day]
+        if (slots && slots.length > 0) return slots[0].end;
+        return "17:00"
+    }
 }
 
 function getCycleLength(intensity: Intensity): number {
@@ -209,11 +269,14 @@ function getCycleLength(intensity: Intensity): number {
 function getDateForSequence(startDate: Date, sequence: number,skipDays : Day[]=[]): Date {
     const date = new Date(startDate);
     let added = 0;
-    while (added < sequence){
-        date.setDate(date.getDate() + 1);
+    let safety = 0;
+    while (added <= sequence && safety < 100){
         if(!skipDays.includes(days[date.getDay()])){
+            if (added === sequence) break;
             added++;
         }
+        date.setDate(date.getDate() + 1);
+        safety++;
     }
     return date;
 }
