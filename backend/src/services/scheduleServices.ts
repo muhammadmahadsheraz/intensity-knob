@@ -8,6 +8,7 @@ import {intensityValues,Intensity,days} from "../constants"
 export const createScheduleService = async (userId: string,intensity: Intensity,skipDays:Day[] =[]) => {
     const entries: IEntry[] = [];
     const settings = intensityValues[intensity].value;
+    await Meeting.updateMany({ userId, status: "scheduled" },{ $set: { status: "pending" } });
     const meetings = await Meeting.find({userId,status: {$nin: ["completed", "cancelled", "scheduled"]}}).sort({ deadline: 1 });
     const availability = await Availability.findOne({userId});
 
