@@ -196,42 +196,14 @@ export const rescheduleSkippedService = async (userId: string) => {
                 .filter(e => e.sequence === seq && e.status === "scheduled" && e.meetingId.toString() !== skipped.meetingId.toString())
                 .sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
 
-            if (seqEntries.length < maxPerDay) {
-                const seqDate = getDateForSequence(startDate, seq, skipDays);
-                const slotStart = getDayStartTime(userId, seqDate);
-                const slotEnd = getDayEndTime(userId, seqDate);
-                const startMin = timeToMinutes(slotStart);
-                const endMin = timeToMinutes(slotEnd);
-                const gap = (endMin - startMin) / (seqEntries.length + 1);
-
-                for (let i = 0; i < seqEntries.length; i++) {
-                    seqEntries[i].date = new Date(seqDate);
-                    seqEntries[i].start = minutesToTime(Math.floor(startMin + gap * (i + 1)));
-                    seqEntries[i].sequence = seq;
-                }
-
-                displaced.date = new Date(seqDate);
-                displaced.start = minutesToTime(Math.floor(startMin));
-                displaced.sequence = seq;
-                break;
-            }
-
-            displaced.date = new Date(seqEntries[0].date);
-            displaced.start = seqEntries[0].start;
-            displaced.sequence = seq;
-
-            const remaining = seqEntries.slice(1);
             const seqDate = getDateForSequence(startDate, seq, skipDays);
-            const slotStart = getDayStartTime(userId, seqDate);
-            const slotEnd = getDayEndTime(userId, seqDate);
-            const startMin = timeToMinutes(slotStart);
-            const endMin = timeToMinutes(slotEnd);
-            const gap = (endMin - startMin) / (remaining.length + 1);
+            const allEntries = seqEntries.length < maxPerDay
+                ? seqEntries
+                : seqEntries.slice(1);
 
-            for (let i = 0; i < remaining.length; i++) {
-                remaining[i].date = new Date(seqDate);
-                remaining[i].start = minutesToTime(Math.floor(startMin + gap * (i + 1)));
-            }
+            redistribute(allEntries, displaced, seqDate, seq);
+
+            if (seqEntries.length < maxPerDay) break;
 
             const nextSeq = seq + 1;
             if (nextSeq >= cycleLength) {
@@ -258,6 +230,20 @@ export const rescheduleSkippedService = async (userId: string) => {
 
     await schedule.save();
     return schedule;
+    function redistribute(entries: any[], displaced: any, date: Date, seq: number) {
+        const all = [displaced, ...entries];
+        const slotStart = getDayStartTime(userId, date);
+        const slotEnd = getDayEndTime(userId, date);
+        const startMin = timeToMinutes(slotStart);
+        const endMin = timeToMinutes(slotEnd);
+        const gap = (endMin - startMin) / all.length;
+
+        for (let i = 0; i < all.length; i++) {
+            all[i].date = new Date(date);
+            all[i].start = minutesToTime(Math.floor(startMin + gap * i));
+            all[i].sequence = seq;
+        }
+    }
     function getDayStartTime(userId:string,date:Date):string{
         if (!availability) return "9:00";
         const day : Day = days[date.getDay()]
