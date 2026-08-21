@@ -8,83 +8,74 @@ import {intensityValues,Intensity,days} from "../constants"
 
 
 //Schedule Services hooked to its services controller
-
-export const createScheduleService = async (userId: string,intensity: Intensity,skipDays:Day[] =[]) => {
-    const entries: IEntry[] = [];
-    const settings = intensityValues[intensity].value;
-    await Meeting.updateMany({ userId, status: "scheduled" },{ $set: { status: "pending" } });
-    const meetings = await Meeting.find({userId,status: {$nin: ["completed", "cancelled", "scheduled"]}}).sort({ deadline: 1 });
-    const availability = await Availability.findOne({userId});
-
+export const createScheduleService = async (userId:string,intensity:Intensity,skipDays : Day[] = []) =>{
+    const entries: IEntry[] = [] 
+    await Meeting.updateMany({userId,status:"scheduled"},{$set:{status:"pending"}})
+    const meetings = await Meeting.find({userId,status :{$nin:["scheduled","completed","cancelled"]}}).sort({deadline:1})
+    const settings = intensityValues[intensity].value
+    const availability = await Availability.findOne({userId})
     if (!availability) return null;
-    if (meetings.length === 0) return null;
 
     const now = new Date();
-    const currentTimeMinutes = now.getHours() * 60 + now.getMinutes();
-    let currentDate = new Date(now);
-    let daynum = now.getDay();
+    const currentTimeMinutes = now.getHours()*60 + now.getMinutes()
+    const currentDate = new Date(now);
+    const startDate = new Date(now)
+    
     let meetingIndex = 0;
-    const startDate = new Date(now);
-
-    for ( let j = 0; j < settings.cycleLength && meetingIndex < meetings.length;) {
-        let day: Day = days[daynum];
-        while(skipDays.includes(day)){
-            currentDate.setDate(currentDate.getDate()+1)
-            daynum= (daynum +1)%7;
-            day = days[daynum];
-        }
-        const slots = availability[day];
-
-        if (slots.length > 0) {
-            const slot = slots[0];
-            const start = timeToMinutes(slot.start);
-            const end = timeToMinutes(slot.end);
-            let currentTime = start;
-
-            if (j === 0 && currentTimeMinutes > start) {
-                currentTime = currentTimeMinutes;
-            }
-
-            if (currentTime < end && start < end) {
-                const availableMinutes = end - currentTime;
-                const timeDiv = j === 0 && currentTimeMinutes > start
-                        ? settings.meetingDuration + settings.break : availableMinutes / settings.meetingsPerDay;
-
-                for (let i = 0; i < settings.meetingsPerDay && meetingIndex < meetings.length; i++) {
-                    entries.push({
-                        meetingId: meetings[meetingIndex]._id,
-                        date: new Date(currentDate),
-                        start: minutesToTime(Math.floor(currentTime)),
-                        sequence: j,
-                        status: "scheduled"
-                    });
-                    meetingIndex++;
-                    currentTime += timeDiv;
-                }
-            }
-        }
-        j++
-        currentDate.setDate(currentDate.getDate() + 1);
-        daynum = (daynum + 1) % 7;
+    let dayNum = now.getDay();
+    for (let i = 0; i < settings.cycleLength && meetingIndex < meetings.length ;){
+    let day : Day = days[dayNum]
+    while(skipDays.includes(day)){
+        currentDate.setDate(currentDate.getDate() +1)
+        dayNum = ( dayNum + 1) % 7;
+        day = days[dayNum];
     }
+    const slots = availability[day]
+    if(slots.length > 0) {
+        let slot = slots[0];
+        let start = timeToMinutes(slot.start)
+        let end = timeToMinutes(slot.end)
+        let currentTime = start 
+        if (i === 0 && currentTimeMinutes > start ){
+            currentTime = currentTimeMinutes + 5;
+        }
+        if (currentTime < end && start < end){
 
-    if (entries.length === 0) return null;
+            const availableMinutes = end - currentTime;
+            const timeDiv = i===0 && currentTimeMinutes > start ? settings.meetingDuration+settings.break : availableMinutes / settings.meetingsPerDay 
+            for (let j = 0 ; j < settings.meetingsPerDay && meetingIndex < meetings.length && currentTime < end;j++){
+                entries.push({
+                    date: new Date(currentDate),
+                    start:minutesToTime(currentTime),
+                    meetingId : meetings[meetingIndex]._id,
+                    sequence:i,
+                    status:"scheduled"
+                })
+                meetingIndex++;
+                currentTime += timeDiv
+                
+            }
+        }
+    };
+            i++;
+            currentDate.setDate(currentDate.getDate()+1)
 
-    const scheduledMeetingIds = entries.map(e => e.meetingId);
-    await Meeting.updateMany(
-        { _id: { $in: scheduledMeetingIds } },
-        { $set: { status: "scheduled" } }
-    );
-
-    await Schedule.deleteMany({ userId });
-
-    return await Schedule.create({
-        userId,
-        intensity,
-        startDate,
-        entries
-    });
-};
+        
+}
+const meetingsMapIds = entries.map(e => e.meetingId)
+await Meetings.updateMany(
+    {_id:{$in:meetingsMapIds}},
+    {$set:{status:"scheduled"}}
+)
+await Schedule.deleteMany({userId})
+return await Schedule.create({
+    userId,
+    intensity,
+    startDate,
+    skipDays,
+    entries
+    })
+}
 
 export const getSchedulesService = async () => {
     return await Schedule.find();
@@ -291,3 +282,4 @@ function timeToMinutes(time: string): number {
     const [hours, minutes] = time.split(":").map(Number);
     return hours * 60 + minutes;
 }
+
