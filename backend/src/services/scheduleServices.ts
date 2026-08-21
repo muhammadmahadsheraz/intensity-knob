@@ -220,6 +220,19 @@ export const rescheduleSkippedService = async (userId: string) => {
             displaced.start = seqEntries[0].start;
             displaced.sequence = seq;
 
+            const remaining = seqEntries.slice(1);
+            const seqDate = getDateForSequence(startDate, seq, skipDays);
+            const slotStart = getDayStartTime(userId, seqDate);
+            const slotEnd = getDayEndTime(userId, seqDate);
+            const startMin = timeToMinutes(slotStart);
+            const endMin = timeToMinutes(slotEnd);
+            const gap = (endMin - startMin) / (remaining.length + 1);
+
+            for (let i = 0; i < remaining.length; i++) {
+                remaining[i].date = new Date(seqDate);
+                remaining[i].start = minutesToTime(Math.floor(startMin + gap * (i + 1)));
+            }
+
             const nextSeq = seq + 1;
             if (nextSeq >= cycleLength) {
                 displaced.status = "pending";
