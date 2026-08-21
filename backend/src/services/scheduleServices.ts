@@ -164,7 +164,7 @@ export const rescheduleSkippedService = async (userId: string) => {
         }
 
         const targetEntries = schedule.entries
-        .filter(e => e.sequence === targetSequence && e.status === "scheduled" && e._id.toString() !== skipped._id.toString())
+        .filter(e => e.sequence === targetSequence && e.status === "scheduled" && e.meetingId.toString() !== skipped.meetingId.toString())
         .sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
 
         if (targetEntries.length === 0) {
@@ -191,9 +191,9 @@ export const rescheduleSkippedService = async (userId: string) => {
         let displaced = targetEntries[targetEntries.length - 1];
         const maxPerDay = intensityValues[schedule.intensity].value.meetingsPerDay;
 
-        for (let seq = targetSequence; seq < cycleLength; seq++) {
+        for (let seq = targetSequence + 1; seq < cycleLength; seq++) {
             const seqEntries = schedule.entries
-                .filter(e => e.sequence === seq && e.status === "scheduled" && e._id.toString() !== skipped._id.toString())
+                .filter(e => e.sequence === seq && e.status === "scheduled" && e.meetingId.toString() !== skipped.meetingId.toString())
                 .sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
 
             if (seqEntries.length < maxPerDay) {
@@ -228,7 +228,7 @@ export const rescheduleSkippedService = async (userId: string) => {
             }
 
             const nextEntries = schedule.entries
-                .filter(e => e.sequence === nextSeq && e.status === "scheduled" && e._id.toString() !== skipped._id.toString())
+                .filter(e => e.sequence === nextSeq && e.status === "scheduled" && e.meetingId.toString() !== skipped.meetingId.toString())
                 .sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
 
             if (nextEntries.length === 0) {
