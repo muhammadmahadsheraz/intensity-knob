@@ -6,6 +6,7 @@ import {createMeetingService,
     updateMeetingService,
     deleteMeetingService} from "../services/meetingServices"
 
+    //minimal meetings controller
 export const createMeeting = async (req:Request,res:Response) => {
 
     try {
