@@ -63,7 +63,7 @@ export const createScheduleService = async (userId:string,intensity:Intensity,sk
         
 }
 const meetingsMapIds = entries.map(e => e.meetingId)
-await Meetings.updateMany(
+await Meeting.updateMany(
     {_id:{$in:meetingsMapIds}},
     {$set:{status:"scheduled"}}
 )
