@@ -27,10 +27,11 @@ export const createScheduleService = async (userId: string,intensity: Intensity,
     const startDate = new Date(now);
 
     for ( let j = 0; j < settings.cycleLength && meetingIndex < meetings.length;) {
-        const day: Day = days[daynum];
-        if(skipDays.includes(day)){
+        let day: Day = days[daynum];
+        while(skipDays.includes(day)){
             currentDate.setDate(currentDate.getDate()+1)
             daynum= (daynum +1)%7;
+            day = days[daynum];
         }
         const slots = availability[day];
 
